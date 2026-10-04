@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="{{ csrf_token }}">
+  <title>{{ app_name }}</title>
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/">
+      <span class="brand-mark small">D</span>
+      <span><strong>DAMI</strong><small>Threads Assistant</small></span>
+    </a>
+    <div class="top-actions">
+      <span id="connection-pill" class="pill neutral">Đang kiểm tra…</span>
+      <button id="logout-btn" class="button ghost small-button">Đăng xuất</button>
+    </div>
+  </header>
+
+  <main class="app-shell">
+    <section class="hero-grid">
+      <div>
+        <p class="eyebrow">TRỢ LÝ TÌM KHÁCH THẬT</p>
+        <h1>Tìm bài. Duyệt nội dung. Gửi có kiểm soát.</h1>
+        <p class="muted max-copy">Mỗi phản hồi đều đi qua Threads Graph API chính thức và chỉ được gửi sau khi bạn duyệt.</p>
+      </div>
+      <div class="metrics">
+        <article class="metric card"><span>Tài khoản</span><strong id="metric-account">—</strong></article>
+        <article class="metric card"><span>Đã gửi hôm nay</span><strong id="metric-daily">0 / 0</strong></article>
+        <article class="metric card"><span>Tối đa mỗi lượt</span><strong>{{ max_batch_size }}</strong></article>
+      </div>
+    </section>
+
+    <div id="global-alert" class="alert hidden" role="alert"></div>
+
+    <nav class="tabs" aria-label="Chức năng">
+      <button class="tab active" data-tab="search">Tìm bài</button>
+      <button class="tab" data-tab="queue">Hàng chờ <span id="queue-count" class="counter">0</span></button>
+      <button class="tab" data-tab="history">Lịch sử</button>
+      <button class="tab" data-tab="settings">Cài đặt</button>
+    </nav>
+
+    <section id="tab-search" class="tab-panel active">
+      <div class="two-column">
+        <article class="card panel">
+          <div class="section-heading">
+            <div><p class="eyebrow">BƯỚC 1</p><h2>Tìm bài công khai</h2></div>
+            <span class="live-badge">API THẬT</span>
+          </div>
+          <form id="search-form" class="stack">
+            <label>Từ khóa
+              <input id="search-query" placeholder="Ví dụ: cần tìm thợ chụp kỷ yếu" minlength="2" maxlength="100" required>
+            </label>
+            <div class="form-row">
+              <label>Sắp xếp
+                <select id="search-type"><option value="RECENT">Mới nhất</option><option value="TOP">Nổi bật</option></select>
+              </label>
+              <label>Kiểu tìm
+                <select id="search-mode"><option value="KEYWORD">Từ khóa</option><option value="TAG">Chủ đề</option></select>
+              </label>
+              <label>Số bài
+                <select id="search-limit"><option>5</option><option selected>10</option><option>20</option><option>25</option></select>
+              </label>
+            </div>
+            <button class="button primary" type="submit">Tìm trên Threads</button>
+          </form>
+        </article>
+
+        <article class="card panel">
+          <div class="section-heading"><div><p class="eyebrow">BƯỚC 2</p><h2>Mẫu phản hồi</h2></div></div>
+          <label>Nội dung mặc định
+            <textarea id="reply-template" rows="7" maxlength="500">{{ default_template }}</textarea>
+          </label>
+          <div class="hint"><code>{username}</code> là tên tài khoản · <code>{keyword}</code> là từ khóa vừa tìm.</div>
+          <p class="muted small-text">Bạn vẫn có thể sửa riêng từng bình luận ở Hàng chờ trước khi duyệt.</p>
+        </article>
+      </div>
+
+      <article class="card panel results-panel">
+        <div class="section-heading wrap">
+          <div><p class="eyebrow">KẾT QUẢ</p><h2 id="results-title">Chưa tìm kiếm</h2></div>
+          <div class="inline-actions">
+            <button id="select-all-btn" class="button ghost small-button" disabled>Chọn tối đa 10</button>
+            <button id="add-queue-btn" class="button secondary small-button" disabled>Thêm vào hàng chờ</button>
+          </div>
+        </div>
+        <div id="search-empty" class="empty-state">Kết nối Threads rồi nhập từ khóa để lấy dữ liệu thật.</div>
+        <div id="search-results" class="result-list"></div>
+      </article>
+    </section>
+
+    <section id="tab-queue" class="tab-panel">
+      <article class="card panel">
+        <div class="section-heading wrap">
+          <div><p class="eyebrow">DUYỆT TRƯỚC KHI GỬI</p><h2>Hàng chờ bình luận</h2></div>
+          <div class="inline-actions">
+            <button id="refresh-queue-btn" class="button ghost small-button">Làm mới</button>
+            <button id="send-approved-btn" class="button primary small-button">Gửi các mục đã duyệt</button>
+            <button id="stop-send-btn" class="button danger small-button hidden">Dừng lượt gửi</button>
+          </div>
+        </div>
+        <div id="job-box" class="job-box hidden">
+          <div class="progress-track"><span id="job-progress"></span></div>
+          <div class="job-copy"><strong id="job-message">Đang chuẩn bị…</strong><span id="job-counts"></span></div>
+        </div>
+        <div id="queue-empty" class="empty-state">Chưa có bài nào trong hàng chờ.</div>
+        <div id="queue-list" class="queue-list"></div>
+      </article>
+    </section>
+
+    <section id="tab-history" class="tab-panel">
+      <article class="card panel">
+        <div class="section-heading"><div><p class="eyebrow">NHẬT KÝ THẬT</p><h2>Lịch sử gửi</h2></div><button id="refresh-history-btn" class="button ghost small-button">Làm mới</button></div>
+        <div class="table-wrap">
+          <table><thead><tr><th>Trạng thái</th><th>Tài khoản</th><th>Nội dung</th><th>Thời gian</th><th>Bài gốc</th></tr></thead><tbody id="history-body"></tbody></table>
+        </div>
+        <div id="history-empty" class="empty-state">Chưa có lịch sử gửi.</div>
+      </article>
+    </section>
+
+    <section id="tab-settings" class="tab-panel">
+      <div class="two-column">
+        <article class="card panel">
+          <p class="eyebrow">KẾT NỐI META</p>
+          <h2>Tài khoản Threads</h2>
+          <div id="account-details" class="account-box">Chưa kết nối.</div>
+          <div class="stack compact">
+            <a id="oauth-connect" class="button primary" href="/auth/threads/start">Kết nối bằng Meta OAuth</a>
+            <button id="refresh-token-btn" class="button secondary">Làm mới access token</button>
+            <button id="disconnect-btn" class="button danger">Ngắt kết nối</button>
+          </div>
+        </article>
+        <article class="card panel">
+          <p class="eyebrow">KẾT NỐI THỦ CÔNG</p>
+          <h2>Dùng token dài hạn</h2>
+          <p class="muted">Dùng khi chạy local hoặc đang thử App. Token được mã hóa trước khi lưu và không bao giờ hiển thị lại.</p>
+          <form id="token-form" class="stack">
+            <label>Threads access token
+              <textarea id="manual-token" rows="5" autocomplete="off" placeholder="Dán token tại đây" required></textarea>
+            </label>
+            <button class="button secondary" type="submit">Kiểm tra và lưu token</button>
+          </form>
+        </article>
+        <article class="card panel full-span">
+          <p class="eyebrow">TRẠNG THÁI CẤU HÌNH</p>
+          <h2>Thông tin kỹ thuật</h2>
+          <dl class="config-grid">
+            <div><dt>OAuth callback</dt><dd id="config-callback">—</dd></div>
+            <div><dt>Khoảng nghỉ giữa lần gửi</dt><dd id="config-delay">—</dd></div>
+            <div><dt>Quyền yêu cầu</dt><dd><code>threads_basic</code>, <code>threads_content_publish</code>, <code>threads_keyword_search</code></dd></div>
+          </dl>
+          <div id="config-warnings"></div>
+        </article>
+      </div>
+    </section>
+  </main>
+
+  <template id="result-template">
+    <article class="result-item">
+      <label class="check-wrap"><input type="checkbox" class="result-check"><span></span></label>
+      <div class="result-main">
+        <div class="result-meta"><strong class="result-user"></strong><span class="result-time"></span><span class="score"></span></div>
+        <p class="result-text"></p>
+        <a class="result-link" target="_blank" rel="noopener">Mở bài gốc ↗</a>
+      </div>
+      <span class="result-status"></span>
+    </article>
+  </template>
+
+  <script>window.DAMI_CONFIG = {maxBatch: {{ max_batch_size }}};</script>
+  <script src="/static/app.js" defer></script>
+</body>
+</html>
+

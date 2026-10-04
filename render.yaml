@@ -1,0 +1,29 @@
+services:
+  - type: web
+    name: dami-threads-assistant
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -m uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    autoDeploy: false
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: APP_DATABASE_PATH
+        value: /var/data/dami_threads.db
+      - key: APP_BASE_URL
+        sync: false
+      - key: META_APP_ID
+        sync: false
+      - key: META_APP_SECRET
+        sync: false
+      - key: APP_ADMIN_PASSWORD
+        generateValue: true
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: TOKEN_ENCRYPTION_KEY
+        generateValue: true
+    disk:
+      name: dami-threads-data
+      mountPath: /var/data
+      sizeGB: 1
