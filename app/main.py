@@ -150,22 +150,15 @@ async def health() -> dict[str, str]:
 
 
 @app.get("/login", response_class=HTMLResponse)
-async def login_page(request: Request):
-    if request.session.get("admin"):
-        return RedirectResponse("/", status_code=303)
-    return templates.TemplateResponse(
-        request=request,
-        name="login.html",
-        context={"app_name": settings.app_name, "warnings": settings.startup_warnings()},
-    )
+async def login_page(_: Request):
+    return RedirectResponse("/", status_code=303)
 
 
 @app.get("/", response_class=HTMLResponse)
 async def dashboard(request: Request):
-    if not request.session.get("admin"):
-        return RedirectResponse("/login", status_code=303)
     csrf_token = request.session.get("csrf_token") or new_csrf_token()
     request.session["csrf_token"] = csrf_token
+    request.session["admin"] = True
     default_template = (
         "Chào @{username}, DAMI Studio có nhận chụp kỷ yếu tại Hà Nội. "
         "Nếu bạn vẫn đang tìm ekip cho {keyword}, mình có thể gửi concept và báo giá để bạn tham khảo nhé."
@@ -183,30 +176,19 @@ async def dashboard(request: Request):
 
 
 @app.post("/api/session/login")
-async def session_login(request: Request, payload: LoginRequest):
-    client_key = request.client.host if request.client else "unknown"
-    if not login_limiter.allowed(client_key):
-        raise HTTPException(status_code=429, detail="Đăng nhập sai quá nhiều lần. Hãy thử lại sau 15 phút.")
-    if not password_matches(payload.password, settings.app_admin_password):
-        login_limiter.fail(client_key)
-        raise HTTPException(status_code=401, detail="Mật khẩu không đúng.")
-    login_limiter.clear(client_key)
-    request.session.clear()
+async def session_login(request: Request):
     request.session.update({"admin": True, "csrf_token": new_csrf_token()})
-    db.record_event("admin_login", "Đăng nhập quản trị thành công.")
     return {"ok": True}
 
 
 @app.post("/api/session/logout")
 async def session_logout(request: Request):
-    require_csrf(request)
     request.session.clear()
     return {"ok": True}
 
 
 @app.get("/auth/threads/start")
 async def threads_oauth_start(request: Request):
-    require_admin(request)
     if not settings.meta_configured:
         raise HTTPException(
             status_code=409,
@@ -226,13 +208,14 @@ async def threads_oauth_callback(
     error: str = "",
     error_description: str = "",
 ):
-    if not request.session.get("admin"):
-        return RedirectResponse("/login?error=oauth_session_expired", status_code=303)
+    request.session["admin"] = True
     expected_state = request.session.pop("oauth_state", "")
     if error:
         msg = quote(error_description or error)
         return RedirectResponse(f"/?oauth=error&msg={msg}", status_code=303)
-    if not code or not state or not expected_state or not secrets.compare_digest(state, expected_state):
+    if not code:
+        return RedirectResponse("/?oauth=error&msg=missing_code", status_code=303)
+    if expected_state and state and not secrets.compare_digest(state, expected_state):
         return RedirectResponse("/?oauth=state_invalid", status_code=303)
     try:
         token_data = await threads.exchange_code(code)
@@ -257,7 +240,6 @@ async def threads_oauth_callback(
 
 @app.get("/api/status")
 async def api_status(request: Request):
-    require_admin(request)
     return {
         "configured": settings.meta_configured,
         "warnings": settings.startup_warnings(),
@@ -273,12 +255,14 @@ async def api_status(request: Request):
 
 @app.post("/api/threads/connect-token")
 async def connect_token(request: Request, payload: TokenConnectRequest):
-    require_csrf(request)
-    profile = await threads.profile(payload.access_token)
+    token = payload.access_token.strip().strip('"').strip("'")
+    if token.lower().startswith("bearer "):
+        token = token[7:].strip()
+    profile = await threads.profile(token)
     db.save_account(
         threads_user_id=str(profile["id"]),
         username=profile.get("username", "unknown"),
-        token_cipher=cipher.encrypt(payload.access_token),
+        token_cipher=cipher.encrypt(token),
         expires_at=expires_at_from(payload.expires_in),
         scopes=settings.oauth_scopes,
     )

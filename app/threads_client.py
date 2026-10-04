@@ -120,12 +120,20 @@ class ThreadsClient:
         )
 
     async def profile(self, token: str) -> dict[str, Any]:
-        return await self._request(
-            "GET",
-            f"{self.settings.api_root}/me",
-            token=token,
-            params={"fields": "id,username,threads_profile_picture_url,threads_biography"},
-        )
+        try:
+            return await self._request(
+                "GET",
+                f"{self.settings.api_root}/me",
+                token=token,
+                params={"fields": "id,username,threads_profile_picture_url,threads_biography"},
+            )
+        except ThreadsApiError:
+            return await self._request(
+                "GET",
+                f"{self.settings.api_root}/me",
+                token=token,
+                params={"fields": "id,username"},
+            )
 
     async def keyword_search(
         self,

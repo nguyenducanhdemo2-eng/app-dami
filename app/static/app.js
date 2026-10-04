@@ -13,8 +13,7 @@ async function api(path, options = {}) {
   let data = {};
   try { data = await response.json(); } catch (_) {}
   if (response.status === 401) {
-    location.href = '/login';
-    throw new Error('Phiên đăng nhập đã hết hạn.');
+    throw new Error(data.detail || 'Yêu cầu không được cấp quyền.');
   }
   if (!response.ok) throw new Error(data.detail || `Yêu cầu thất bại (HTTP ${response.status}).`);
   return data;
@@ -388,10 +387,13 @@ document.querySelector('#disconnect-btn').addEventListener('click', async () => 
   catch (error) { showAlert(error.message); }
 });
 
-document.querySelector('#logout-btn').addEventListener('click', async () => {
-  try { await api('/api/session/logout', {method: 'POST'}); location.href = '/login'; }
-  catch (error) { showAlert(error.message); }
-});
+const logoutBtn = document.querySelector('#logout-btn');
+if (logoutBtn) {
+  logoutBtn.addEventListener('click', async () => {
+    try { await api('/api/session/logout', {method: 'POST'}); location.reload(); }
+    catch (error) { showAlert(error.message); }
+  });
+}
 
 const searchParams = new URLSearchParams(location.search);
 const oauthState = searchParams.get('oauth');

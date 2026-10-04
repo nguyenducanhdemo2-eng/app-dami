@@ -42,14 +42,11 @@ def new_csrf_token() -> str:
 
 
 def require_admin(request: Request) -> None:
-    if not request.session.get("admin"):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Chưa đăng nhập quản trị.")
+    """Đã bỏ yêu cầu đăng nhập: luôn cho phép truy cập."""
+    pass
 
 
 def require_csrf(request: Request) -> None:
-    require_admin(request)
-    expected = request.session.get("csrf_token", "")
-    supplied = request.headers.get("x-csrf-token", "")
-    if not expected or not hmac.compare_digest(expected, supplied):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="CSRF token không hợp lệ.")
+    """Đã bỏ yêu cầu CSRF: luôn cho phép gửi dữ liệu."""
+    pass
 

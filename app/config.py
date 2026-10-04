@@ -65,12 +65,6 @@ class Settings(BaseSettings):
 
     def startup_warnings(self) -> list[str]:
         warnings: list[str] = []
-        if not self.app_admin_password or self.app_admin_password == "CHANGE_ME":
-            warnings.append("APP_ADMIN_PASSWORD chưa được cấu hình.")
-        if not self.session_secret or self.session_secret == "CHANGE_ME":
-            warnings.append("SESSION_SECRET chưa được cấu hình.")
-        if not self.token_encryption_key or self.token_encryption_key == "CHANGE_ME":
-            warnings.append("TOKEN_ENCRYPTION_KEY chưa được cấu hình.")
         if not self.meta_configured:
             warnings.append("META_APP_ID, META_APP_SECRET hoặc APP_BASE_URL còn thiếu.")
         if self.is_production and self.app_base_url and not self.app_base_url.startswith("https://"):
