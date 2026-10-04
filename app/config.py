@@ -36,10 +36,19 @@ class Settings(BaseSettings):
     send_delay_seconds: int = Field(default=15, ge=3, le=300)
 
     @property
-    def redirect_uri(self) -> str:
+    def clean_base_url(self) -> str:
         if not self.app_base_url:
             return ""
-        return f"{self.app_base_url.rstrip('/')}/auth/threads/callback"
+        url = self.app_base_url.strip().rstrip("/")
+        if url.endswith("/login"):
+            url = url[:-6].rstrip("/")
+        return url
+
+    @property
+    def redirect_uri(self) -> str:
+        if not self.clean_base_url:
+            return ""
+        return f"{self.clean_base_url}/auth/threads/callback"
 
     @property
     def api_root(self) -> str:

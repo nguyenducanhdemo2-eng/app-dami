@@ -393,9 +393,12 @@ document.querySelector('#logout-btn').addEventListener('click', async () => {
   catch (error) { showAlert(error.message); }
 });
 
-const oauthState = new URLSearchParams(location.search).get('oauth');
-if (oauthState === 'connected') showAlert('Đã kết nối Threads qua OAuth.', 'success');
-if (oauthState === 'error') showAlert('Meta từ chối hoặc hủy yêu cầu kết nối.');
+const searchParams = new URLSearchParams(location.search);
+const oauthState = searchParams.get('oauth');
+const oauthMsg = searchParams.get('msg');
+if (oauthState === 'connected') showAlert('Đã kết nối Threads qua OAuth thành công!', 'success');
+if (oauthState === 'error') showAlert(`Lỗi kết nối Threads: ${oauthMsg || 'Meta từ chối hoặc hủy yêu cầu kết nối.'}`, 'danger');
+if (oauthState === 'state_invalid') showAlert('OAuth state không hợp lệ hoặc phiên làm việc đã hết hạn. Hãy thử lại.', 'danger');
 
 Promise.all([loadStatus(), loadQueue(), loadHistory()]).then(() => {
   if (state.status?.job?.running) beginJobPolling();

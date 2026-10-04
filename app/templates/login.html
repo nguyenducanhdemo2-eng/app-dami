@@ -24,7 +24,10 @@
       <p class="muted">Dùng mật khẩu <code>APP_ADMIN_PASSWORD</code> trong tệp <code>.env</code>.</p>
       <form id="login-form" class="stack">
         <label>Mật khẩu
-          <input id="password" type="password" autocomplete="current-password" required autofocus>
+          <div style="position: relative; display: flex; align-items: center;">
+            <input id="password" type="password" autocomplete="current-password" required autofocus style="width: 100%; padding-right: 42px;">
+            <button type="button" id="toggle-pw-btn" style="position: absolute; right: 8px; background: none; border: none; cursor: pointer; padding: 4px; font-size: 16px; color: inherit;" title="Hiện / ẩn mật khẩu">👁</button>
+          </div>
         </label>
         <button class="button primary" type="submit">Đăng nhập</button>
       </form>
@@ -42,17 +45,34 @@
   <script>
     const form = document.querySelector('#login-form');
     const errorBox = document.querySelector('#login-error');
+    const toggleBtn = document.querySelector('#toggle-pw-btn');
+    const pwInput = document.querySelector('#password');
+
+    if (toggleBtn && pwInput) {
+      toggleBtn.addEventListener('click', () => {
+        const isPassword = pwInput.type === 'password';
+        pwInput.type = isPassword ? 'text' : 'password';
+        toggleBtn.textContent = isPassword ? '🙈' : '👁';
+      });
+    }
+
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('error') === 'oauth_session_expired') {
+      errorBox.textContent = 'Phiên làm việc đã hết hạn hoặc bạn chưa đăng nhập trước khi kết nối Threads OAuth. Hãy đăng nhập lại.';
+      errorBox.classList.remove('hidden');
+    }
+
     form.addEventListener('submit', async (event) => {
       event.preventDefault();
       errorBox.classList.add('hidden');
-      const button = form.querySelector('button');
+      const button = form.querySelector('button[type="submit"]');
       button.disabled = true;
       button.textContent = 'Đang kiểm tra...';
       try {
         const response = await fetch('/api/session/login', {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({password: document.querySelector('#password').value})
+          body: JSON.stringify({password: pwInput.value})
         });
         const data = await response.json();
         if (!response.ok) throw new Error(data.detail || 'Không thể đăng nhập.');

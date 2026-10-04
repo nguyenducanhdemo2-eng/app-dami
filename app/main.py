@@ -7,6 +7,7 @@ from collections import defaultdict, deque
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from typing import Any
+from urllib.parse import quote
 
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
@@ -217,25 +218,41 @@ async def threads_oauth_start(request: Request):
 
 
 @app.get("/auth/threads/callback")
-async def threads_oauth_callback(request: Request, code: str = "", state: str = "", error: str = ""):
-    require_admin(request)
+@app.get("/login/auth/threads/callback")
+async def threads_oauth_callback(
+    request: Request,
+    code: str = "",
+    state: str = "",
+    error: str = "",
+    error_description: str = "",
+):
+    if not request.session.get("admin"):
+        return RedirectResponse("/login?error=oauth_session_expired", status_code=303)
     expected_state = request.session.pop("oauth_state", "")
     if error:
-        return RedirectResponse(f"/?oauth=error", status_code=303)
-    if not code or not state or not secrets.compare_digest(state, expected_state):
-        raise HTTPException(status_code=400, detail="OAuth state không hợp lệ hoặc đã hết hạn.")
-    token_data = await threads.exchange_code(code)
-    access_token = token_data["access_token"]
-    profile = await threads.profile(access_token)
-    db.save_account(
-        threads_user_id=str(profile["id"]),
-        username=profile.get("username", "unknown"),
-        token_cipher=cipher.encrypt(access_token),
-        expires_at=expires_at_from(token_data.get("expires_in")),
-        scopes=settings.oauth_scopes,
-    )
-    db.record_event("threads_connected", f"Đã kết nối @{profile.get('username', 'unknown')} qua OAuth.")
-    return RedirectResponse("/?oauth=connected", status_code=303)
+        msg = quote(error_description or error)
+        return RedirectResponse(f"/?oauth=error&msg={msg}", status_code=303)
+    if not code or not state or not expected_state or not secrets.compare_digest(state, expected_state):
+        return RedirectResponse("/?oauth=state_invalid", status_code=303)
+    try:
+        token_data = await threads.exchange_code(code)
+        access_token = token_data["access_token"]
+        profile = await threads.profile(access_token)
+        db.save_account(
+            threads_user_id=str(profile["id"]),
+            username=profile.get("username", "unknown"),
+            token_cipher=cipher.encrypt(access_token),
+            expires_at=expires_at_from(token_data.get("expires_in")),
+            scopes=settings.oauth_scopes,
+        )
+        db.record_event("threads_connected", f"Đã kết nối @{profile.get('username', 'unknown')} qua OAuth.")
+        return RedirectResponse("/?oauth=connected", status_code=303)
+    except ThreadsApiError as exc:
+        db.record_event("threads_oauth_error", f"Lỗi đổi token Threads: {exc.safe_message}")
+        return RedirectResponse(f"/?oauth=error&msg={quote(exc.safe_message)}", status_code=303)
+    except Exception as exc:
+        db.record_event("threads_oauth_error", f"Lỗi không xác định: {exc}")
+        return RedirectResponse(f"/?oauth=error&msg={quote(str(exc))}", status_code=303)
 
 
 @app.get("/api/status")
